@@ -1,16 +1,19 @@
 // src/app/api/ai/route.ts
 import { NextRequest } from 'next/server';
-import { aiLimiter } from '@/lib/ratelimit';
+import { getAiLimiter } from '@/lib/ratelimit';
 
 export const runtime = 'edge';
 
 export async function POST(req: NextRequest) {
   try {
-    // --- Rate limit (per-IP) ---
+    // --- Rate limit (per IP) ---
     const ipHeader = req.headers.get('x-forwarded-for');
     const ip = ipHeader ? ipHeader.split(',')[0].trim() : '127.0.0.1';
 
-    const { success, limit, remaining, reset } = await aiLimiter.limit(ip);
+    // Lazy-create limiter and enforce
+    const limiter = getAiLimiter();
+    const { success, limit, remaining, reset } = await limiter.limit(ip);
+
     if (!success) {
       return new Response(JSON.stringify({ error: 'Rate limit exceeded. Try again later.' }), {
         status: 429,
