@@ -1,7 +1,7 @@
-// .eslint.config.mjs
+// .eslintrc.js
 import next from 'eslint-config-next';
 
-export default [
+const config = [
   ...next,
   {
     rules: {
@@ -10,3 +10,5 @@ export default [
     },
   },
 ];
+
+export default config;
