@@ -1,3 +1,4 @@
+// src/app/ai/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -26,8 +27,15 @@ export default function AIPage() {
         body: JSON.stringify({ prompt }),
       });
 
+      if (res.status === 429) {
+        setError('Too many requests. Please wait a minute and try again.');
+        setLoading(false);
+        return;
+      }
+
       if (!res.ok || !res.body) {
-        setError('No stream received from server.');
+        const msg = await safeError(res);
+        setError(msg ?? 'No stream received from server.');
         setLoading(false);
         return;
       }
@@ -42,9 +50,9 @@ export default function AIPage() {
 
         buffer += decoder.decode(value, { stream: true });
 
-        // Server-Sent Events frames are separated by blank lines
+        // Split Server-Sent Events frames on blank lines
         const frames = buffer.split('\n\n');
-        buffer = frames.pop() ?? ''; // keep the last incomplete frame
+        buffer = frames.pop() ?? ''; // keep last incomplete frame
 
         for (const frame of frames) {
           const line = frame.trim();
@@ -54,14 +62,13 @@ export default function AIPage() {
           if (payload === '[DONE]') continue;
 
           try {
-            // Chat Completions stream delta format
             const json = JSON.parse(payload) as {
               choices?: Array<{ delta?: { content?: string } }>;
             };
             const delta = json.choices?.[0]?.delta?.content ?? '';
             if (delta) setAnswer((prev) => prev + delta);
           } catch {
-            // ignore keep-alives / non-JSON chunks
+            // ignore keep-alives / non-JSON
           }
         }
       }
@@ -92,7 +99,7 @@ export default function AIPage() {
         </div>
       </header>
 
-      <Card className="p-4 space-y-3">
+      <Card className="space-y-3 p-4">
         <label className="text-sm font-medium">Prompt</label>
         <Textarea
           value={prompt}
@@ -115,10 +122,20 @@ export default function AIPage() {
       </Card>
 
       {error ? (
-        <Card className="p-4 border-red-300 text-red-700">{error}</Card>
+        <Card className="p-4 text-red-700">{error}</Card>
       ) : (
         <Card className="min-h-[160px] whitespace-pre-wrap p-4">{answer || '—'}</Card>
       )}
     </main>
   );
+}
+
+async function safeError(res: Response): Promise<string | null> {
+  try {
+    const data = await res.json();
+    if (data?.error && typeof data.error === 'string') return data.error;
+    return null;
+  } catch {
+    return null;
+  }
 }
